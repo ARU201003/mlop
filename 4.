@@ -1,0 +1,108 @@
+```r
+# Practical 4: Car Acceptability Classification
+
+# Install packages if required
+# install.packages("caret")
+# install.packages("rpart")
+# install.packages("rpart.plot")
+# install.packages("ggplot2")
+
+# Step 1: Load libraries
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+
+# Step 2: Load the dataset
+car_df = read.csv(
+  file.choose(),
+  sep = ",",
+  header = FALSE,
+  stringsAsFactors = TRUE
+)
+
+# Step 3: Assign column names
+colnames(car_df) = c(
+  "buying", "maint", "doors", "persons",
+  "lug_boot", "safety", "acceptability"
+)
+
+# Step 4: Clean factor labels
+levels(car_df$buying) = c("_high", "_low", "_med", "_vhigh")
+levels(car_df$maint) = c("_high", "_low", "_med", "_vhigh")
+levels(car_df$doors) = c("_2", "_3", "_4", "_5more")
+levels(car_df$persons) = c("_2", "_4", "_more")
+levels(car_df$lug_boot) = c("_big", "_med", "_small")
+levels(car_df$safety) = c("_high", "_low", "_med")
+
+# Step 5: Plot car acceptability distribution
+ggplot(car_df, aes(x = acceptability, fill = acceptability)) +
+  geom_bar(show.legend = FALSE) +
+  labs(
+    title = "Distribution of Car Acceptability Classes",
+    x = "Acceptability Class",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+# Step 6: Split data into training and testing sets
+set.seed(3033)
+
+intrain = createDataPartition(
+  car_df$acceptability,
+  p = 0.7,
+  list = FALSE
+)
+
+training = car_df[intrain, ]
+testing = car_df[-intrain, ]
+
+# Step 7: Set up repeated 10-fold cross-validation
+trctrl = trainControl(
+  method = "repeatedcv",
+  number = 10,
+  repeats = 3
+)
+
+# Step 8: Train the Decision Tree model
+set.seed(3333)
+
+dtree = train(
+  acceptability ~ .,
+  data = training,
+  method = "rpart",
+  parms = list(split = "information"),
+  trControl = trctrl,
+  tuneLength = 10
+)
+
+# Step 9: Plot the final Decision Tree
+prp(
+  dtree$finalModel,
+  box.palette = "Reds",
+  tweak = 1.2,
+  faclen = 0,
+  varlen = 0
+)
+
+# Step 10: Predict acceptability for test data
+test_pred = predict(dtree, newdata = testing)
+
+# Step 11: Display confusion matrix and evaluation statistics
+confusionMatrix(test_pred, testing$acceptability)
+
+# Step 12: Compare actual and predicted categories
+eval_df = data.frame(
+  Actual = testing$acceptability,
+  Predicted = test_pred
+)
+
+ggplot(eval_df, aes(x = Actual, fill = Predicted)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Actual vs Predicted Car Acceptability (Test Set)",
+    x = "Actual Acceptability",
+    fill = "Predicted Class"
+  ) +
+  theme_minimal()
+```
