@@ -1,0 +1,178 @@
+# Practical 1: AirPassengers — Monthly Airline Passenger Volume
+
+## Aim
+To analyze airline passenger traffic trends and seasonal patterns from 1949 to 1960 and build a Multiple Linear Regression model to predict passenger volume.
+
+## Algorithm Used
+**Multiple Linear Regression (`lm`)**
+
+Multiple Linear Regression is a supervised learning algorithm used to predict a numerical value using two or more independent variables.
+
+- **Target variable:** Passengers
+- **Input variables:** Year and Month
+- **Training data:** 75%
+- **Testing data:** 25%
+
+## Software and Libraries
+- RStudio
+- `ggplot2` — for plotting graphs
+- `dplyr` — for data manipulation
+
+## Complete R Code
+
+```r
+# Aim: Analyze airline passenger trends and predict passenger volume
+
+# Load libraries
+library(ggplot2)
+library(dplyr)
+
+# 1. Load Data
+ap = read.csv("AirPassengers.csv")
+
+# Convert columns into appropriate formats
+ap$Date = as.Date(ap$Date)
+ap$Month = factor(ap$Month, levels = month.abb)
+ap$YearFactor = factor(ap$Year)
+
+# PART A: ANALYTICAL PLOTTING
+
+# a. Histogram
+ggplot(ap, aes(x = Passengers)) +
+  geom_histogram(bins = 15, fill = "skyblue", color = "black") +
+  labs(title = "Histogram of Passenger Volume",
+       x = "Passengers (Thousands)", y = "Count") +
+  theme_minimal()
+
+# b. Boxplot across years
+ggplot(ap, aes(x = YearFactor, y = Passengers,
+               fill = YearFactor)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Passenger Volume Across Years",
+       x = "Year", y = "Passengers (Thousands)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# c. Scatter plot with linear trendline
+ggplot(ap, aes(x = Date, y = Passengers)) +
+  geom_point(color = "steelblue") +
+  geom_smooth(method = "lm", color = "red",
+              linetype = "dashed") +
+  labs(title = "Passenger Volume Over Time with Linear Trendline",
+       x = "Date", y = "Passengers (Thousands)") +
+  theme_minimal()
+
+# d. Average monthly passenger traffic
+ap %>%
+  group_by(Month) %>%
+  summarise(Avg_Passengers = mean(Passengers)) %>%
+  ggplot(aes(x = Month, y = Avg_Passengers, fill = Month)) +
+  geom_col() +
+  labs(title = "Barplot of Average Monthly Passenger Traffic",
+       x = "Month", y = "Average Passengers") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# PART B: MODEL BUILDING
+
+# Split data into training and testing sets
+set.seed(42)
+train_idx = sample(1:nrow(ap), 0.75 * nrow(ap))
+train = ap[train_idx, ]
+test = ap[-train_idx, ]
+
+# Build Multiple Linear Regression model
+model = lm(Passengers ~ Year + Month, data = train)
+summary(model)
+
+# Predict passenger volume
+preds = predict(model, newdata = test)
+actuals = test$Passengers
+
+# Calculate RMSE and R-squared
+rmse = sqrt(mean((actuals - preds)^2))
+
+r2 = 1 - sum((actuals - preds)^2) /
+  sum((actuals - mean(actuals))^2)
+
+print(c(RMSE = rmse, R2 = r2))
+
+# Actual vs Predicted plot
+eval_df = data.frame(Actual = actuals, Predicted = preds)
+
+ggplot(eval_df, aes(x = Actual, y = Predicted)) +
+  geom_point(color = "blue", size = 2.5) +
+  geom_abline(intercept = 0, slope = 1,
+              color = "red", linetype = "dashed") +
+  labs(title = "Actual vs Predicted Airline Passengers",
+       x = "Actual", y = "Predicted") +
+  theme_minimal()
+```
+
+## Explanation of Code
+
+1. `library(ggplot2)` loads the graph plotting package.
+2. `library(dplyr)` loads functions for data manipulation.
+3. `read.csv()` reads the dataset.
+4. `as.Date()` converts the Date column into date format.
+5. `factor()` converts Month and Year into categorical variables where required.
+6. `geom_histogram()` creates a histogram of passenger volume.
+7. `geom_boxplot()` compares passenger volume across years.
+8. `geom_point()` creates a scatter plot.
+9. `geom_smooth(method = "lm")` adds a linear regression trendline.
+10. `group_by(Month)` groups records by month.
+11. `summarise()` calculates average passenger volume for each month.
+12. `geom_col()` creates a bar chart using the calculated averages.
+13. `set.seed(42)` ensures the random split is reproducible.
+14. `sample()` selects 75% of observations for training.
+15. `lm()` builds the Multiple Linear Regression model.
+16. `predict()` predicts passenger volume for the test data.
+17. `rmse` measures prediction error; lower is better.
+18. `r2` measures how well the model predicts variation in passenger volume.
+19. `geom_abline()` draws the ideal line where actual values equal predicted values.
+
+## Output and Interpretation
+
+1. **Histogram:** Shows the distribution of passenger volume. Very high passenger counts occur less frequently than moderate counts.
+2. **Boxplot:** Shows that passenger traffic generally increases from 1949 to 1960, with greater variation in later years.
+3. **Trendline:** Shows an overall upward trend in passenger traffic over time.
+4. **Monthly barplot:** July and August have the highest average passenger traffic, while November has the lowest.
+5. **Actual vs Predicted plot:** Points closer to the red dashed line represent more accurate predictions.
+
+The numerical RMSE and R² values are displayed in the RStudio console after running the code.
+
+## Result
+
+The airline passenger dataset was analyzed using four graphical techniques. A Multiple Linear Regression model was built using Year and Month to predict passenger volume. The model was evaluated using RMSE and R², and its predictions were compared with actual passenger values using a scatter plot.
+
+## Important Viva Questions
+
+**1. Which algorithm is used?**  
+Multiple Linear Regression using `lm()`.
+
+**2. What is the target variable?**  
+Passengers.
+
+**3. What are the predictor variables?**  
+Year and Month.
+
+**4. What is RMSE?**  
+Root Mean Squared Error; it measures the difference between actual and predicted values.
+
+**5. What is R²?**  
+A measure of how well the model explains variation in the target variable.
+
+**6. Why do we split the dataset?**  
+To train the model on one portion and evaluate it on unseen observations.
+
+**7. Why is `set.seed()` used?**  
+To make the random split reproducible.
+
+**8. What is seasonality?**  
+A pattern that repeats at regular intervals, such as passenger traffic increasing during particular months.
+
+**9. What does a boxplot show?**  
+The median, spread, and possible outliers in data.
+
+**10. What does the red dashed line in the final graph represent?**  
+The ideal line where actual passenger values equal predicted passenger values.
