@@ -1,0 +1,366 @@
+# Practical 2: Student Knowledge Classification and Clustering Using R
+
+## Aim
+
+To classify students according to their knowledge level using a Decision Tree Classification model and to group students based on their study time and exam performance using the K-Means Clustering algorithm.
+
+## Software and Libraries Used
+
+- RStudio
+- `readxl` — to import Excel data
+- `ggplot2` — to create graphs
+- `rpart` — to build the Decision Tree model
+- `rpart.plot` — to visualize the Decision Tree
+
+## Complete R Code
+
+```r
+# Practical 2: Student Knowledge Classification and Clustering
+
+# Install packages if they are not already installed
+# install.packages("readxl")
+# install.packages("ggplot2")
+# install.packages("rpart")
+# install.packages("rpart.plot")
+
+# Step 1: Load libraries
+library(readxl)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+
+# Step 2: Load the dataset
+file_path = file.choose()
+
+df = read_excel(file_path, sheet = "Training_Data")
+
+# Step 3: Select and rename the required columns
+df = df[, 1:6]
+
+colnames(df) = c("STG", "SCG", "STR", "LPR", "PEG", "UNS")
+
+# Step 4: Explore the dataset
+head(df)
+dim(df)
+str(df)
+summary(df)
+
+# Step 5: Plot the number of students in each knowledge level
+ggplot(df, aes(y = UNS, fill = UNS)) +
+  geom_bar() +
+  labs(
+    title = "Number of Students in Each Knowledge Level",
+    y = "Knowledge Level",
+    x = "Number of Students"
+  ) +
+  theme_minimal()
+
+# Step 6: Prepare the data and split it into training and testing sets
+set.seed(42)
+
+df$UNS = as.factor(df$UNS)
+
+train_idx = sample(
+  seq_len(nrow(df)),
+  size = 0.75 * nrow(df)
+)
+
+train = df[train_idx, ]
+test = df[-train_idx, ]
+
+# Step 7: Build the Decision Tree Classification model
+dt_model = rpart(
+  UNS ~ STG + SCG + STR + LPR + PEG,
+  data = train,
+  method = "class"
+)
+
+# Display the model
+dt_model
+
+# Plot the Decision Tree
+rpart.plot(
+  dt_model,
+  type = 2,
+  extra = 104,
+  under = TRUE,
+  fallen.leaves = TRUE,
+  box.palette = "Blues",
+  main = "Decision Tree for Student Knowledge Level"
+)
+
+# Step 8: Predict knowledge levels for the test dataset
+pred_test = predict(
+  dt_model,
+  newdata = test,
+  type = "class"
+)
+
+# Step 9: Create the confusion matrix
+cm = table(
+  Actual = test$UNS,
+  Predicted = pred_test
+)
+
+cm
+
+# Step 10: Calculate classification accuracy
+acc = sum(diag(cm)) / sum(cm)
+
+acc
+
+# Step 11: Plot actual versus predicted knowledge levels
+eval_df = data.frame(
+  Actual = test$UNS,
+  Predicted = pred_test
+)
+
+ggplot(eval_df, aes(x = Actual, fill = Predicted)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Actual vs Predicted Student Knowledge Level (Test Set)",
+    x = "Actual Knowledge Level",
+    fill = "Predicted Level"
+  ) +
+  theme_minimal()
+
+# Step 12: Select variables for K-Means clustering
+df1 = df[, c("STG", "PEG")]
+
+df1 = as.matrix(df1)
+
+# Step 13: Scale the data for the Elbow Method
+scal = scale(df1)
+
+# Step 14: Calculate WSS for different numbers of clusters
+maximumClusters = 10
+
+wss = sapply(1:maximumClusters, function(k) {
+  kmeans(
+    scal,
+    k,
+    nstart = 50,
+    iter.max = 10
+  )$tot.withinss
+})
+
+# Plot the Elbow Method graph
+plot(
+  1:maximumClusters,
+  wss,
+  type = "b",
+  xlab = "k values",
+  ylab = "Total Within-Cluster SS",
+  main = "Elbow Method for Optimal k"
+)
+
+abline(v = 4, col = "red", lty = 2)
+
+# Step 15: Perform K-Means clustering with four clusters
+km4 = kmeans(df1, 4, iter.max = 10)
+
+# Display clustering results
+km4
+
+# Step 16: Add cluster assignments to the dataset
+df$cluster = as.factor(km4$cluster)
+
+# Step 17: Plot the clusters
+ggplot(df, aes(x = STG, y = PEG, color = cluster)) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  labs(
+    title = "K Means Clustering (with K = 4)",
+    x = "Study Time (STG)",
+    y = "Exam Performance (PEG)"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Line-by-Line Code Explanation
+
+### 1. Loading the libraries
+
+- `library(readxl)` loads the package used to read Excel files.
+- `library(ggplot2)` loads the package used to create graphs.
+- `library(rpart)` loads the function used to build a Decision Tree.
+- `library(rpart.plot)` loads the function used to draw the Decision Tree.
+
+### 2. Importing the dataset
+
+- `file_path = file.choose()` opens a window to select the Excel file.
+- `read_excel(file_path, sheet = "Training_Data")` reads the specified worksheet and stores it in `df`.
+
+### 3. Selecting and renaming columns
+
+- `df = df[, 1:6]` keeps all rows and the first six columns.
+- `colnames(df) = c(...)` assigns the required names to the columns:
+  - `STG`: Study time for the goal object.
+  - `SCG`: Repetition number for the goal object.
+  - `STR`: Study time for related objects.
+  - `LPR`: Exam performance for related objects.
+  - `PEG`: Exam performance for the goal object.
+  - `UNS`: Student knowledge level.
+
+### 4. Exploring the data
+
+- `head(df)` displays the first six rows.
+- `dim(df)` displays the number of rows and columns.
+- `str(df)` displays the structure and data types.
+- `summary(df)` provides a statistical summary.
+
+The journal reports 258 rows and 6 columns.
+
+### 5. Plotting knowledge levels
+
+- `ggplot(df, aes(y = UNS, fill = UNS))` starts the graph and maps knowledge levels to the categories and colours.
+- `geom_bar()` counts the observations in each category.
+- `labs()` adds the graph title and axis labels.
+- `theme_minimal()` gives the graph a simple appearance.
+
+**Output:** A bar chart showing the number of students at each knowledge level.
+
+### 6. Splitting the dataset
+
+- `set.seed(42)` makes the random split reproducible.
+- `as.factor(df$UNS)` converts knowledge levels into categorical values.
+- `nrow(df)` returns the number of rows.
+- `seq_len(nrow(df))` generates the row numbers.
+- `sample()` randomly selects rows.
+- `size = 0.75 * nrow(df)` selects 75% of the data for training.
+- `df[train_idx, ]` creates the training dataset.
+- `df[-train_idx, ]` creates the testing dataset from the remaining rows.
+
+**Purpose:** The model learns from training data and is evaluated on testing data.
+
+### 7. Building the Decision Tree
+
+- `rpart()` builds the classification model.
+- `UNS ~ STG + SCG + STR + LPR + PEG` specifies the target variable and the five input variables.
+- `data = train` uses the training dataset.
+- `method = "class"` specifies classification.
+- `dt_model` stores the trained model.
+- `rpart.plot()` displays the model as a tree.
+- `type`, `extra`, `under`, `fallen.leaves`, and `box.palette` control the tree's appearance and displayed information.
+- `main` sets the graph title.
+
+**Output:** A Decision Tree containing rules for predicting student knowledge levels.
+
+### 8. Predicting the test data
+
+- `predict()` uses the trained model to make predictions.
+- `newdata = test` specifies the testing dataset.
+- `type = "class"` requests predicted categories.
+- `pred_test` stores the predictions.
+
+### 9. Creating the confusion matrix
+
+- `table()` counts the combinations of actual and predicted categories.
+- `Actual = test$UNS` supplies the actual knowledge levels.
+- `Predicted = pred_test` supplies the predicted levels.
+- `cm` stores the confusion matrix.
+
+The diagonal values represent correct predictions.
+
+### 10. Calculating accuracy
+
+- `diag(cm)` extracts the diagonal values.
+- `sum(diag(cm))` calculates the number of correct predictions.
+- `sum(cm)` calculates the total number of predictions.
+- Dividing the two gives classification accuracy.
+
+Formula:
+
+**Accuracy = Correct Predictions / Total Predictions**
+
+The journal reports accuracy of approximately **87.69%**, or 57 correct predictions out of 65.
+
+### 11. Plotting actual versus predicted values
+
+- `data.frame()` creates a dataset containing actual and predicted categories.
+- `aes(x = Actual, fill = Predicted)` uses actual categories on the horizontal axis and predicted categories as the fill.
+- `geom_bar(position = "dodge")` displays the bars side by side.
+- `labs()` adds the title and labels.
+- `theme_minimal()` applies a simple graph style.
+
+**Output:** A bar chart comparing actual and predicted knowledge-level categories.
+
+### 12. Selecting variables for clustering
+
+- `df[, c("STG", "PEG")]` selects study time and exam performance.
+- `as.matrix(df1)` converts the selected data into a matrix.
+
+### 13. Scaling the data
+
+- `scale(df1)` standardizes the selected numerical variables.
+- `scal` stores the scaled data.
+
+Scaling helps make variables comparable when calculating distances.
+
+### 14. Applying the Elbow Method
+
+- `maximumClusters = 10` sets the maximum number of clusters to test.
+- `sapply()` repeats the calculation for each value of `k`.
+- `kmeans(scal, k, ...)` runs K-Means with different cluster counts.
+- `nstart = 50` tries different initial cluster assignments.
+- `iter.max = 10` limits the iterations.
+- `$tot.withinss` extracts the total within-cluster sum of squares.
+- `plot()` draws the Elbow Method graph.
+- `type = "b"` displays points connected by lines.
+- `abline(v = 4, ...)` draws a vertical line at four clusters.
+
+**Purpose:** The Elbow Method helps identify a suitable number of clusters.
+
+### 15. Performing K-Means clustering
+
+- `kmeans(df1, 4, iter.max = 10)` groups students into four clusters using the original `STG` and `PEG` values.
+- `km4` stores the result.
+- `km4` prints the cluster sizes, centres, and other details.
+
+The journal reports cluster sizes of 97, 32, 37, and 92 students.
+
+### 16. Adding cluster assignments
+
+- `km4$cluster` contains the cluster number assigned to each row.
+- `as.factor()` converts cluster numbers into categories.
+- `df$cluster` adds those assignments to the dataset.
+
+### 17. Plotting the clusters
+
+- `aes(x = STG, y = PEG, color = cluster)` plots study time against exam performance and colours points by cluster.
+- `geom_point()` draws one point for each student.
+- `size = 2.5` sets the point size.
+- `alpha = 0.8` sets transparency.
+- `labs()` adds the graph title and axis labels.
+- `theme_minimal()` applies a clean graph style.
+
+**Output:** A scatterplot showing the four student groups.
+
+---
+
+## Final Workflow and Results
+
+1. Imported the Excel dataset.
+2. Selected and renamed six required columns.
+3. Explored the data and plotted knowledge-level counts.
+4. Split the data into training and testing sets.
+5. Built a Decision Tree classification model.
+6. Predicted knowledge levels and evaluated the results.
+7. Used the Elbow Method to choose four clusters.
+8. Applied K-Means and visualized the student groups.
+
+### Results recorded in the journal
+
+- Dataset size: 258 rows and 6 columns.
+- Classification model: Decision Tree using `rpart()`.
+- Classification accuracy: 87.69%.
+- Correct test predictions: 57 out of 65.
+- Clustering algorithm: K-Means.
+- Number of clusters: 4.
+- Cluster sizes: 97, 32, 37, and 92.
+- Between-cluster sum of squares / total sum of squares: 76.1%.
+
+**Important note:** The journal uses scaled data for the Elbow Method but the original, unscaled data for the final K-Means model. The code above preserves that workflow. For a more consistent analysis, the final model would generally use the same scaled data used to select the cluster count.
+
+**Conclusion:** The practical demonstrates how Decision Tree Classification can predict student knowledge levels and how K-Means Clustering can group students according to study time and exam performance.
