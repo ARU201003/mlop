@@ -1,0 +1,223 @@
+```r
+# Practical 7: Heart Attack 1-Year Survival Classification
+
+# Install packages if required
+# install.packages("readr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+# install.packages("rpart")
+# install.packages("rpart.plot")
+
+# Step 1: Load libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+
+# Step 2: Load the dataset and handle missing-value markers
+names = c(
+  "survival", "still_alive", "age", "pericardial_effusion",
+  "fractional_shortening", "epss", "lvdd",
+  "wall_motion_score", "wall_motion_index",
+  "mult", "name", "group", "alive_at_1"
+)
+
+raw_echo = read_csv(
+  file.choose(),
+  col_names = names,
+  na = c("?", "NA", ""),
+  show_col_types = FALSE
+)
+
+# Step 3: Count missing values
+na_counts = colSums(is.na(raw_echo))
+
+print("Missing values per column:")
+print(na_counts)
+
+# Step 4: Prepare data for missing-value plot
+missing_df = data.frame(
+  Feature = factor(names(raw_echo), levels = rev(names(raw_echo))),
+  Missing_Count = as.numeric(na_counts),
+  Missing_Pct = as.numeric(round(colMeans(is.na(raw_echo)) * 100, 1))
+)
+
+# Step 5: Plot missing values
+ggplot(
+  missing_df,
+  aes(x = reorder(Feature, Missing_Count),
+      y = Missing_Count,
+      fill = Missing_Count)
+) +
+  geom_col() +
+  geom_text(
+    aes(label = paste0(Missing_Count, " (", Missing_Pct, "%)")),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_fill_gradient(low = "steelblue", high = "firebrick") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Missing Values Count & Percentage by Feature",
+    subtitle = paste0(
+      "Dataset: echocardiogram.data (Total Rows = ",
+      nrow(raw_echo), ")"
+    ),
+    x = "Feature Name",
+    y = "Missing Values Count"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold")
+  )
+
+# Step 6: Define the 1-year survival outcome and clean data
+echo = raw_echo %>%
+  mutate(
+    survive_1year = case_when(
+      alive_at_1 == "1" ~ 1,
+      alive_at_1 == "0" ~ 0,
+      survival >= 12 ~ 1,
+      survival < 12 & still_alive == 0 ~ 0,
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  filter(!is.na(survive_1year)) %>%
+  select(
+    age, pericardial_effusion, fractional_shortening,
+    epss, lvdd, wall_motion_index, survive_1year
+  ) %>%
+  mutate(
+    across(
+      c(age, fractional_shortening, epss, lvdd, wall_motion_index),
+      ~ ifelse(is.na(.x), median(.x, na.rm = TRUE), .x)
+    )
+  ) %>%
+  mutate(
+    survive_1year = factor(
+      survive_1year,
+      levels = c(0, 1),
+      labels = c("Died", "Survived")
+    )
+  )
+
+# Step 7: Plot the survival outcome distribution
+ggplot(echo, aes(x = survive_1year, fill = survive_1year)) +
+  geom_bar(show.legend = FALSE) +
+  scale_fill_manual(
+    values = c("Died" = "lightcoral", "Survived" = "lightgreen")
+  ) +
+  labs(
+    title = "1-Year Patient Survival Distribution",
+    x = "Outcome",
+    y = "Patient Count"
+  ) +
+  theme_minimal()
+
+# Step 8: Split into training and testing datasets
+set.seed(42)
+
+train_idx = sample(
+  seq_len(nrow(echo)),
+  size = 0.75 * nrow(echo)
+)
+
+train = echo[train_idx, ]
+test = echo[-train_idx, ]
+
+# Step 9: Build Logistic Regression model
+logit_model = glm(
+  survive_1year ~ age + fractional_shortening + epss +
+    lvdd + wall_motion_index,
+  data = train,
+  family = binomial
+)
+
+summary(logit_model)
+
+# Step 10: Predict survival probabilities
+logit_prob = predict(
+  logit_model,
+  newdata = test,
+  type = "response"
+)
+
+# Convert probabilities into predicted classes
+logit_pred = factor(
+  ifelse(logit_prob > 0.5, "Survived", "Died"),
+  levels = c("Died", "Survived")
+)
+
+# Step 11: Evaluate Logistic Regression
+logit_cm = table(
+  Actual = test$survive_1year,
+  Predicted = logit_pred
+)
+
+logit_cm
+
+logit_acc = sum(diag(logit_cm)) / sum(logit_cm)
+logit_acc
+
+# Step 12: Build a tuned Decision Tree
+dt_model = rpart(
+  survive_1year ~ .,
+  data = train,
+  method = "class",
+  control = rpart.control(
+    cp = 0.001,
+    maxdepth = 2,
+    minsplit = 4
+  )
+)
+
+# Plot the Decision Tree
+rpart.plot(
+  dt_model,
+  type = 2,
+  extra = 104,
+  under = TRUE,
+  fallen.leaves = TRUE,
+  box.palette = "RdYlGn",
+  main = "Tuned Decision Tree for 1-Year Heart Attack Survival"
+)
+
+# Step 13: Predict using the Decision Tree
+dt_pred = predict(
+  dt_model,
+  newdata = test,
+  type = "class"
+)
+
+# Step 14: Evaluate Decision Tree
+dt_cm = table(
+  Actual = test$survive_1year,
+  Predicted = dt_pred
+)
+
+dt_cm
+
+dt_acc = sum(diag(dt_cm)) / sum(dt_cm)
+dt_acc
+
+# Step 15: Plot actual vs predicted survival outcomes
+eval_df = data.frame(
+  Actual = test$survive_1year,
+  Predicted = dt_pred
+)
+
+ggplot(eval_df, aes(x = Actual, fill = Predicted)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(
+    values = c("Died" = "lightcoral", "Survived" = "lightgreen")
+  ) +
+  labs(
+    title = "Actual vs Predicted 1-Year Survival (Test Set)",
+    x = "Actual Outcome",
+    fill = "Predicted Outcome"
+  ) +
+  theme_minimal()
+```
