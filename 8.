@@ -1,0 +1,155 @@
+```r
+# Practical 8: Dow Jones Stock Return Prediction
+
+# Install packages if required
+# install.packages("readr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+# install.packages("e1071")
+
+# Step 1: Load libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(e1071)
+
+# Step 2: Load dataset
+dj_raw = read_csv(
+  file.choose(),
+  show_col_types = FALSE
+)
+
+# Step 3: Convert dollar columns to numeric
+clean_dollar = function(x) {
+  as.numeric(gsub("[$,]", "", x))
+}
+
+# Step 4: Clean data and create lag features
+dj = dj_raw %>%
+  mutate(
+    open = clean_dollar(open),
+    high = clean_dollar(high),
+    low = clean_dollar(low),
+    close = clean_dollar(close),
+    stock = as.factor(stock),
+    quarter = as.factor(quarter),
+    date = as.Date(date, format = "%m/%d/%Y")
+  ) %>%
+  arrange(stock, date) %>%
+  group_by(stock) %>%
+  mutate(
+    pct_return_lag = lag(percent_change_price, 1),
+    close_lag = lag(close, 1),
+    volume_lag = lag(volume, 1)
+  ) %>%
+  ungroup() %>%
+  filter(
+    !is.na(percent_change_next_weeks_price) &
+    !is.na(pct_return_lag) &
+    !is.na(percent_change_volume_over_last_wk)
+  )
+
+# Display cleaned dataset information
+cat(
+  "Cleaned dataset ready with",
+  nrow(dj),
+  "rows across 30 stocks.\n"
+)
+
+# Step 5: Split data by quarter
+train = dj %>% filter(quarter == 1)
+test = dj %>% filter(quarter == 2)
+
+stocks = levels(dj$stock)
+
+# Create an empty dataset to store predictions
+test_results = data.frame()
+
+# Step 6: Train an SVR model for each stock
+for (s in stocks) {
+
+  s_train = train %>% filter(stock == s)
+  s_test = test %>% filter(stock == s)
+
+  # Skip stocks without sufficient training or testing data
+  if (nrow(s_train) < 2 || nrow(s_test) == 0) {
+    next
+  }
+
+  m_svr = svm(
+    percent_change_next_weeks_price ~
+      pct_return_lag + close_lag + volume_lag +
+      percent_change_volume_over_last_wk,
+    data = s_train
+  )
+
+  s_test$Predicted_Return = predict(
+    m_svr,
+    newdata = s_test
+  )
+
+  test_results = rbind(test_results, s_test)
+}
+
+# Step 7: Calculate model evaluation metrics
+svr_rmse = sqrt(
+  mean(
+    (
+      test_results$percent_change_next_weeks_price -
+      test_results$Predicted_Return
+    )^2
+  )
+)
+
+svr_mae = mean(
+  abs(
+    test_results$percent_change_next_weeks_price -
+    test_results$Predicted_Return
+  )
+)
+
+cat("SVR Model Test Set Performance:\n")
+cat("RMSE:", round(svr_rmse, 4), "%\n")
+cat("MAE:", round(svr_mae, 4), "%\n")
+
+# Step 8: Rank stocks by predicted return
+stock_rankings = test_results %>%
+  group_by(stock) %>%
+  summarise(
+    Mean_Predicted_Return =
+      round(mean(Predicted_Return), 2),
+    Mean_Actual_Return =
+      round(mean(percent_change_next_weeks_price), 2),
+    Volatility_Risk_SD =
+      round(sd(percent_change_next_weeks_price), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(Mean_Predicted_Return))
+
+# Step 9: Display top five predicted returns
+cat("TOP 5 STOCKS BY PREDICTED RETURN:\n")
+print(head(stock_rankings, 5))
+
+# Step 10: Display bottom five predicted returns
+cat("\nBOTTOM 5 STOCKS BY PREDICTED RETURN:\n")
+print(tail(stock_rankings, 5))
+
+# Step 11: Plot top five predicted returns
+top5 = head(stock_rankings, 5)
+
+ggplot(
+  top5,
+  aes(
+    x = reorder(stock, Mean_Predicted_Return),
+    y = Mean_Predicted_Return
+  )
+) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 5 Stocks by Mean Predicted Return",
+    x = "Stock",
+    y = "Mean Predicted Return (%)"
+  ) +
+  theme_minimal()
+```
