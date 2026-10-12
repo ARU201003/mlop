@@ -1,0 +1,112 @@
+```r
+# Practical 5: Daily Demand Forecasting Using Regression
+
+# Step 1: Load libraries
+library(readr)
+library(ggplot2)
+
+# Step 2: Load the dataset
+demand = read_csv2(
+  file.choose(),
+  show_col_types = FALSE
+)
+
+# Step 3: Assign column names
+colnames(demand) = c(
+  "week", "day", "non_urgent", "urgent",
+  "type_a", "type_b", "type_c", "fiscal",
+  "traffic", "bank_1", "bank_2", "bank_3", "target"
+)
+
+# Step 4: Plot non-urgent orders against total orders
+ggplot(demand, aes(x = non_urgent, y = target)) +
+  geom_point(color = "darkgreen", size = 2.5) +
+  geom_smooth(method = "lm", color = "red") +
+  labs(
+    title = "Non-Urgent Orders vs Total Target Orders",
+    x = "Non-Urgent Orders",
+    y = "Total Target Orders"
+  ) +
+  theme_minimal()
+
+# Step 5: Split into training and testing datasets
+set.seed(42)
+
+train_idx = sample(
+  seq_len(nrow(demand)),
+  size = 0.8 * nrow(demand)
+)
+
+train = demand[train_idx, ]
+test = demand[-train_idx, ]
+
+# Step 6: Build the Multiple Linear Regression model
+model_forecast = lm(
+  target ~ week + day + traffic + bank_1 + bank_2 + bank_3,
+  data = train
+)
+
+# Display model summary
+summary(model_forecast)
+
+# Step 7: Predict total orders for the test dataset
+pred = predict(
+  model_forecast,
+  newdata = test
+)
+
+# Step 8: Calculate RMSE
+rmse = sqrt(
+  mean((test$target - pred)^2)
+)
+
+rmse
+
+# Step 9: Calculate R-squared on the test dataset
+r2 = 1 - (
+  sum((test$target - pred)^2) /
+  sum((test$target - mean(test$target))^2)
+)
+
+r2
+
+# Step 10: Prepare actual and predicted values
+eval_df = data.frame(
+  Index = 1:nrow(test),
+  Actual = test$target,
+  Predicted = pred
+)
+
+# Step 11: Plot actual vs forecasted orders
+ggplot(eval_df, aes(x = Index)) +
+  geom_line(
+    aes(y = Actual, color = "Actual Orders"),
+    linewidth = 1
+  ) +
+  geom_point(
+    aes(y = Actual, color = "Actual Orders"),
+    size = 2.5
+  ) +
+  geom_line(
+    aes(y = Predicted, color = "Forecasted Orders"),
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  geom_point(
+    aes(y = Predicted, color = "Forecasted Orders"),
+    size = 2.5
+  ) +
+  scale_color_manual(
+    values = c(
+      "Actual Orders" = "black",
+      "Forecasted Orders" = "red"
+    )
+  ) +
+  labs(
+    title = "Actual vs Forecasted Order Demand (Test Set)",
+    x = "Sample Index",
+    y = "Total Orders",
+    color = "Series"
+  ) +
+  theme_minimal()
+```
