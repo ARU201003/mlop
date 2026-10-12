@@ -1,0 +1,324 @@
+# Practical 3: WiFi Signal Strength Indoor Localization Using Decision Tree Classification
+
+## Aim
+
+To estimate the indoor room location (Room 1, 2, 3, or 4) using signal strengths from seven WiFi routers.
+
+## Model Used
+
+**Decision Tree Classification (`rpart`)**
+
+A Decision Tree is a supervised machine-learning algorithm that learns decision rules from labelled data to predict a category.
+
+In this practical:
+- **Input variables:** `X1`, `X2`, `X3`, `X4`, `X5`, `X6`, `X7` — WiFi signal strengths.
+- **Target variable:** `room` — the room number.
+- **Data split:** 70% training and 30% testing.
+- **Evaluation:** Classification accuracy and an actual-versus-predicted graph.
+
+## Software and Libraries
+
+- RStudio
+- `readr`
+- `ggplot2`
+- `rpart`
+- `rpart.plot`
+
+## Complete R Code
+
+```r
+# Practical 3: WiFi Signal Strength Indoor Localization
+
+# Install packages if they are not already installed
+# install.packages("readr")
+# install.packages("ggplot2")
+# install.packages("rpart")
+# install.packages("rpart.plot")
+
+# Step 1: Load libraries
+library(readr)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+
+# Step 2: Load the dataset
+wifi = read_tsv(
+  "wifi_localization.txt",
+  col_names = c("X1", "X2", "X3", "X4",
+                "X5", "X6", "X7", "room"),
+  show_col_types = FALSE
+)
+
+# Step 3: Convert room into a categorical variable
+wifi$room = as.factor(wifi$room)
+
+# Step 4: Plot Router 1 signal density across rooms
+ggplot(wifi, aes(x = X1, fill = room, color = room)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Router 1 (X1) Signal Density across Rooms",
+    x = "Signal Strength X1 (dBm)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+# Step 5: Split into training and testing datasets
+set.seed(42)
+
+train_idx = sample(
+  seq_len(nrow(wifi)),
+  size = 0.7 * nrow(wifi)
+)
+
+wifi_train = wifi[train_idx, ]
+wifi_test = wifi[-train_idx, ]
+
+# Step 6: Build the Decision Tree model
+fit.rpart = rpart(
+  room ~ .,
+  data = wifi_train
+)
+
+# Display the model
+fit.rpart
+
+# Step 7: Plot the Decision Tree
+rpart.plot(
+  fit.rpart,
+  type = 2,
+  extra = 104,
+  under = TRUE,
+  fallen.leaves = TRUE,
+  main = "Decision Tree for WiFi Indoor Localization",
+  box.palette = "BuGn",
+  shadow.col = "gray",
+  nn = TRUE
+)
+
+# Step 8: Predict rooms in the testing dataset
+pred.test.rpart = predict(
+  fit.rpart,
+  newdata = wifi_test[, 1:7],
+  type = "class"
+)
+
+# Step 9: Calculate test accuracy
+accuracy.test = mean(
+  pred.test.rpart == wifi_test$room
+)
+
+accuracy.test
+
+# Step 10: Create a dataset for actual vs predicted comparison
+eval_df = data.frame(
+  Actual = wifi_test$room,
+  Predicted = pred.test.rpart
+)
+
+# Step 11: Plot actual vs predicted room counts
+ggplot(eval_df, aes(x = Actual, fill = Predicted)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Actual vs Predicted Room Counts (Test Set)",
+    x = "Actual Room",
+    fill = "Predicted Room"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Line-by-Line Code Explanation
+
+### 1. Loading the libraries
+
+- `library(readr)` loads functions for reading text files.
+- `library(ggplot2)` loads graphing functions.
+- `library(rpart)` loads the Decision Tree algorithm.
+- `library(rpart.plot)` loads functions for plotting the Decision Tree.
+
+### 2. Loading the dataset
+
+- `read_tsv()` reads a tab-separated text file.
+- `"wifi_localization.txt"` is the dataset filename.
+- `col_names = c(...)` assigns names to the eight columns.
+- `X1` to `X7` represent the seven WiFi signal-strength measurements.
+- `room` represents the actual room label.
+- `show_col_types = FALSE` hides the column-type information message.
+- `wifi` stores the imported data.
+
+If R cannot locate the file, use the correct file path or replace the filename with `file.choose()`.
+
+### 3. Converting room to a factor
+
+`wifi$room = as.factor(wifi$room)`
+
+Converts the room labels into categorical values because the model must predict a room category rather than a continuous numerical value.
+
+### 4. Plotting signal density
+
+- `ggplot(wifi, ...)` starts the graph using the dataset.
+- `aes(x = X1)` places Router 1's signal strength on the horizontal axis.
+- `fill = room` fills the curves according to room.
+- `color = room` gives the rooms different curve colours.
+- `geom_density()` plots the estimated distribution of signal strengths.
+- `alpha = 0.5` makes the fills partly transparent.
+- `labs()` adds the graph title and axis labels.
+- `theme_minimal()` applies a clean graph style.
+
+**Output:** A density plot comparing Router 1 signal-strength distributions across rooms.
+
+### 5. Splitting the data
+
+- `set.seed(42)` makes the random split reproducible.
+- `nrow(wifi)` returns the number of observations.
+- `seq_len(nrow(wifi))` creates the row numbers.
+- `sample()` randomly selects the training rows.
+- `size = 0.7 * nrow(wifi)` selects 70% of the rows.
+- `wifi[train_idx, ]` creates the training dataset.
+- `wifi[-train_idx, ]` creates the testing dataset from the remaining 30%.
+
+**Purpose:** Training data teaches the model, while testing data evaluates its predictions.
+
+### 6. Building the Decision Tree
+
+```r
+fit.rpart = rpart(
+  room ~ .,
+  data = wifi_train
+)
+```
+
+- `rpart()` builds the Decision Tree model.
+- `room` is the target variable.
+- `~` separates the target from the predictors.
+- `.` means use all other columns in the training data as input variables.
+- `data = wifi_train` specifies the training dataset.
+- `fit.rpart` stores the trained model.
+
+Because `room` is a factor, `rpart()` performs classification by default.
+
+### 7. Plotting the Decision Tree
+
+- `rpart.plot()` displays the fitted tree.
+- `type = 2` controls the split-label layout.
+- `extra = 104` adds extra information to the node labels.
+- `under = TRUE` places the extra information below the labels.
+- `fallen.leaves = TRUE` aligns the terminal nodes at the bottom.
+- `main` specifies the graph title.
+- `box.palette = "BuGn"` chooses the blue-green colour palette.
+- `shadow.col = "gray"` adds grey shadows.
+- `nn = TRUE` displays node numbers.
+
+**Output:** A tree diagram showing the decision rules used to predict rooms.
+
+### 8. Predicting rooms
+
+- `predict()` uses the trained model to generate predictions.
+- `fit.rpart` is the trained Decision Tree.
+- `newdata = wifi_test[, 1:7]` supplies the seven signal measurements from the test data.
+- `type = "class"` requests room categories.
+- `pred.test.rpart` stores the predicted rooms.
+
+The actual `room` column is excluded from the input so that the model does not receive the answer while predicting.
+
+### 9. Calculating accuracy
+
+```r
+accuracy.test = mean(
+  pred.test.rpart == wifi_test$room
+)
+```
+
+- `pred.test.rpart == wifi_test$room` compares predicted rooms with actual rooms.
+- Correct predictions return `TRUE`; incorrect predictions return `FALSE`.
+- `mean()` calculates the proportion of correct predictions.
+- `accuracy.test` stores the result.
+
+**Formula:**
+
+Accuracy = Correct Predictions / Total Predictions
+
+For example, an accuracy of `0.90` represents 90% correct predictions.
+
+### 10. Creating the evaluation dataset
+
+```r
+eval_df = data.frame(
+  Actual = wifi_test$room,
+  Predicted = pred.test.rpart
+)
+```
+
+Creates a new dataset containing the actual and predicted room labels for comparison.
+
+### 11. Plotting actual versus predicted rooms
+
+- `aes(x = Actual, fill = Predicted)` groups observations by actual room and colours them by predicted room.
+- `geom_bar(position = "dodge")` displays bars side by side.
+- `labs()` adds the title and axis labels.
+- `theme_minimal()` applies a simple visual style.
+
+**Output:** A bar chart comparing actual room counts with predicted room counts.
+
+---
+
+## Important Viva Questions
+
+**1. What is indoor localization?**
+
+It is the process of identifying a person's location inside a building.
+
+**2. Which model is used?**
+
+Decision Tree Classification using `rpart()`.
+
+**3. What are the input variables?**
+
+The seven WiFi signal-strength variables, `X1` to `X7`.
+
+**4. What is the target variable?**
+
+`room`.
+
+**5. Why use `as.factor()`?**
+
+Because the room number represents a category to be predicted.
+
+**6. Why split the dataset?**
+
+To evaluate the model on data that was not used during training.
+
+**7. What is density analysis?**
+
+It shows the distribution of signal-strength measurements across rooms.
+
+**8. Why use `room ~ .`?**
+
+It tells R to predict `room` using all the other columns in the training dataset.
+
+**9. How is the model evaluated?**
+
+By comparing predictions with actual room labels and calculating classification accuracy.
+
+**10. Why is RMSE not used here?**
+
+The target is a categorical room label, so classification accuracy is more appropriate than a numerical regression error metric.
+
+---
+
+## Final Workflow and Results
+
+1. Load the required packages.
+2. Import the WiFi dataset and assign column names.
+3. Convert the room variable into a factor.
+4. Plot Router 1's signal-strength density across rooms.
+5. Split the data into 70% training and 30% testing sets.
+6. Train and plot the Decision Tree model.
+7. Predict rooms for the test dataset.
+8. Calculate test accuracy.
+9. Plot actual versus predicted room counts.
+
+**Conclusion:** The practical uses WiFi signal strengths from seven routers to classify the indoor room as Room 1, 2, 3, or 4.
+
+**Results note:** The journal code includes the accuracy calculation, but the numerical accuracy result is not available in the retrieved practical excerpt. Run the code to obtain your actual result rather than reporting an invented score.
