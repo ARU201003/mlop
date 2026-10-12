@@ -1,0 +1,112 @@
+```r
+# Practical 6: Beijing Air Pollution Forecasting
+
+# Step 1: Load libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+# Step 2: Load the dataset
+prsa_raw = read_csv(
+  file.choose(),
+  show_col_types = FALSE
+)
+
+# Step 3: Assign column names
+colnames(prsa_raw) = c(
+  "id", "year", "month", "day", "hour",
+  "pm2.5", "dew_point", "temp", "pressure",
+  "wind_dir", "wind_speed", "snow_hours", "rain_hours"
+)
+
+# Step 4: Create new features and clean data
+prsa = prsa_raw %>%
+  mutate(
+    date = as.Date(paste(year, month, day, sep = "-")),
+    pm25_lag1 = lag(pm2.5, 1),
+    pm25_lag2 = lag(pm2.5, 2),
+    pm25_lag24 = lag(pm2.5, 24),
+    log_wind = log(wind_speed + 1),
+    year = as.factor(year),
+    month = as.factor(month),
+    hour = as.factor(hour),
+    wind_dir = as.factor(wind_dir)
+  ) %>%
+  filter(
+    !is.na(pm2.5) &
+    !is.na(pm25_lag1) &
+    !is.na(pm25_lag2) &
+    !is.na(pm25_lag24)
+  )
+
+# Step 5: Plot previous hour PM2.5 vs current PM2.5
+ggplot(head(prsa, 2000), aes(x = pm25_lag1, y = pm2.5)) +
+  geom_point(color = "darkcyan", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red") +
+  labs(
+    title = "Autoregression: Lag-1 PM2.5 vs Current PM2.5",
+    x = "Previous Hour PM2.5 (Lag-1)",
+    y = "Current Hour PM2.5"
+  ) +
+  theme_minimal()
+
+# Step 6: Split data chronologically into training and testing sets
+split_pt = floor(0.8 * nrow(prsa))
+
+train = prsa[1:split_pt, ]
+test = prsa[(split_pt + 1):nrow(prsa), ]
+
+# Step 7: Build the Multiple Linear Regression model
+model = lm(
+  `pm2.5` ~ pm25_lag1 + pm25_lag2 + pm25_lag24 +
+    dew_point + temp + pressure + log_wind +
+    snow_hours + rain_hours + wind_dir + hour + month,
+  data = train
+)
+
+# Step 8: Predict PM2.5 for the test dataset
+pred = predict(model, newdata = test)
+
+# Step 9: Calculate RMSE
+rmse = sqrt(mean((test$`pm2.5` - pred)^2))
+rmse
+
+# Step 10: Calculate test R-squared
+r2 = 1 - (
+  sum((test$`pm2.5` - pred)^2) /
+  sum((test$`pm2.5` - mean(test$`pm2.5`))^2)
+)
+r2
+
+# Step 11: Prepare data for plotting
+ts_df = data.frame(
+  Hour = 1:150,
+  Actual = test$`pm2.5`[1:150],
+  Predicted = pred[1:150]
+)
+
+# Step 12: Plot actual vs predicted PM2.5
+ggplot(ts_df, aes(x = Hour)) +
+  geom_line(
+    aes(y = Actual, color = "Actual PM2.5"),
+    linewidth = 1
+  ) +
+  geom_line(
+    aes(y = Predicted, color = "Forecasted PM2.5"),
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  scale_color_manual(
+    values = c(
+      "Actual PM2.5" = "black",
+      "Forecasted PM2.5" = "red"
+    )
+  ) +
+  labs(
+    title = "Beijing PM2.5 Forecast: Actual vs Predicted Time-Series",
+    x = "Hour Index",
+    y = "PM2.5 (ug/m3)",
+    color = "Series"
+  ) +
+  theme_minimal()
+```
